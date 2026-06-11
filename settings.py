@@ -1,0 +1,31 @@
+WIDTH = 1200
+HEIGHT = 720
+FPS = 60
+
+TITLE = "Pet Worlds: Навчальна пригода"
+
+WHITE = (235, 235, 235)
+BLACK = (0, 0, 0)
+
+DARK = (22, 25, 34)
+DARK_BLUE = (32, 42, 65)
+PANEL = (35, 40, 55)
+
+GRAY = (90, 90, 90)
+LIGHT_GRAY = (180, 180, 180)
+
+YELLOW = (220, 190, 90)
+RED = (220, 70, 70)
+GREEN = (87, 174, 112)
+BLUE = (102, 174, 214)
+
+SOFT_PURPLE = (90, 100, 145)
+SOFT_ORANGE = (235, 156, 92)
+CARD_BG = (255, 230, 145)
+
+BUTTON = (28, 34, 52)
+BUTTON_HOVER = (42, 50, 74)
+
+
+TEXT_MUTED = (190, 195, 210)
+SUCCESS = (90, 210, 130)
