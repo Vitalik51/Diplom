@@ -1,7 +1,7 @@
 import os
 import pygame
 import sys
-
+from minigames import MiniGames
 from scene_objects import SceneObjectManager
 from settings import *
 from pet import Pet
@@ -9,7 +9,7 @@ from world import World
 from quiz import Quiz
 from ui import UI
 from background import BackgroundManager
-
+from progress import Progress
 
 PLAYER_TYPE_NAMES = {
     "school": "Школяр",
@@ -30,14 +30,14 @@ class Game:
         self.scene_objects = SceneObjectManager()
         self.ui = UI(self.screen)
         self.background = BackgroundManager()
-
+        self.minigames = MiniGames(self.screen)
+        self.progress = Progress()
         self.running = True
         self.state = "ai_disclaimer"
         self.disclaimer_start_time = pygame.time.get_ticks()
         self.ai_disclaimer_button = None
-
         self.pause = False
-
+        self.text_answer = ""
         self.menu_buttons = {}
         self.player_type_buttons = {}
         self.back_button = None
@@ -204,9 +204,15 @@ class Game:
 
     def get_big_test_questions(self):
         if hasattr(self.quiz, "get_big_test"):
+            difficulty_level = self.progress.get_stars_count(self.player_type) + 1
+
+            if difficulty_level > 3:
+                difficulty_level = 3
+
             return self.quiz.get_big_test(
                 self.player_type,
-                self.big_test_total
+                self.big_test_total,
+                difficulty_level
             )
 
         return []
@@ -265,14 +271,17 @@ class Game:
         self.current_task = None
 
         passed = percent >= self.big_test_need_percent
-
+        
         if passed:
+            if not self.big_test_from_menu:
+                self.progress.add_star(self.player_type)
+
             self.test_result = {
                 "passed": True,
                 "percent": percent,
                 "title": "Вітаю! Тест пройдено!",
                 "text": f"Ти набрав {percent}% правильних відповідей. Це успішний результат.",
-            }
+                    }
         else:
             self.test_result = {
                 "passed": False,
@@ -295,6 +304,8 @@ class Game:
                 return pygame.transform.smoothscale(image, (WIDTH, HEIGHT))
 
         return None
+
+
 
     def draw_test_result(self):
         if not hasattr(self, "big_test_bg"):
@@ -328,11 +339,10 @@ class Game:
             title_img,
             title_img.get_rect(center=(WIDTH // 2, 235))
         )
-
         self.ui.wrap_text(
             self.test_result["text"],
             370,
-            300,
+            325,
             460,
             3,
             WHITE,
@@ -362,9 +372,14 @@ class Game:
             return
 
         self.task_marker = clicked_object
+        difficulty_level = self.progress.get_stars_count(self.player_type) + 1
+
+        if difficulty_level > 3:
+            difficulty_level = 3
+
         self.current_task = self.quiz.get_location_task(
             self.world.get_location(),
-            self.world.current_world
+            difficulty_level
         )
 
         if self.current_task is None:
@@ -374,6 +389,7 @@ class Game:
             return
 
         self.show_task = True
+        self.text_answer = ""
         self.show_quest = False
         self.show_card_found = False
 
@@ -599,6 +615,24 @@ class Game:
         self.state = "game"
 
     def handle_keydown(self, event):
+        if self.state == "game" and self.show_task and self.current_task:
+            if self.current_task.get("type") == "text":
+                if event.key == pygame.K_BACKSPACE:
+                    self.text_answer = self.text_answer[:-1]
+                elif event.key == pygame.K_RETURN:
+                    self.complete_marker_question(self.text_answer.strip())
+                    self.text_answer = ""
+                else:
+                    if event.unicode:
+                        self.text_answer += event.unicode
+                return
+        if self.state == "minigames":
+            if event.key == pygame.K_ESCAPE:
+                self.state = "menu"
+            else:
+                self.minigames.handle_keydown(event)
+            return
+
         if event.key == pygame.K_l and self.state == "game":
             self.lock_game()
             return
@@ -617,17 +651,24 @@ class Game:
                     self.reset_windows()
                 else:
                     self.pause = not self.pause
+                return
 
             if self.state == "big_test":
                 self.state = "menu"
+                return
 
     def handle_mouse_click(self, pos):
         if self.state == "ai_disclaimer":
             elapsed = pygame.time.get_ticks() - self.disclaimer_start_time
-
             if elapsed > 2500:
                 if self.ai_disclaimer_button and self.ai_disclaimer_button.collidepoint(pos):
                     self.state = "menu"
+            return
+
+        if self.state == "minigames":
+            result = self.minigames.handle_click(pos)
+            if result == "back":
+                self.state = "menu"
             return
 
         if self.state == "menu":
@@ -635,8 +676,8 @@ class Game:
                 if rect.collidepoint(pos):
                     if key == "play":
                         self.state = "select_type"
-                    elif key == "test":
-                        self.state = "test_select_type"
+                    elif key == "test" or key == "minigames":
+                        self.state = "minigames"
                     elif key == "rules":
                         self.state = "rules"
                     elif key == "about":
@@ -725,6 +766,38 @@ class Game:
         if self.state == "game" and not self.pause:
             self.update_transition()
             self.update_world_transition()
+            
+    def draw_text_question(self):
+        panel = pygame.Rect(260, 170, 680, 360)
+        self.ui.transparent_panel(panel, (18, 22, 34, 240), WHITE, 22)
+
+        title = self.ui.big_font.render("Текстова команда", True, YELLOW)
+        self.screen.blit(title, title.get_rect(center=(WIDTH // 2, 220)))
+
+        self.ui.wrap_text(
+            self.current_task["question"],
+            320,
+            270,
+            560,
+            3,
+            WHITE,
+            self.ui.font,
+            32
+        )
+
+        input_rect = pygame.Rect(370, 390, 460, 55)
+        pygame.draw.rect(self.screen, (25, 30, 45), input_rect, border_radius=12)
+        pygame.draw.rect(self.screen, YELLOW, input_rect, 2, border_radius=12)
+
+        answer_img = self.ui.font.render(self.text_answer, True, WHITE)
+        self.screen.blit(answer_img, (input_rect.x + 18, input_rect.y + 15))
+
+        hint = self.ui.small_font.render(
+            "Введи команду з клавіатури та натисни Enter",
+            True,
+            TEXT_MUTED
+        )
+        self.screen.blit(hint, hint.get_rect(center=(WIDTH // 2, 470)))
 
     def draw_game(self):
         self.background.draw(
@@ -768,7 +841,10 @@ class Game:
             self.ui.draw_quest_window(quest_text, progress_text)
 
         if self.show_task and self.current_task:
-            self.task_buttons = self.ui.draw_quiz(self.current_task)
+            if self.current_task.get("type") == "text":
+                self.draw_text_question()
+            else:
+                self.task_buttons = self.ui.draw_quiz(self.current_task)
 
         self.ui.draw_pet_helper(
             self.pet,
@@ -781,6 +857,8 @@ class Game:
 
         self.draw_transition()
         self.draw_world_transition()
+
+
 
     def draw_big_test(self):
         if not hasattr(self, "big_test_bg"):
@@ -841,6 +919,25 @@ class Game:
             self.ai_disclaimer_button = pygame.Rect(WIDTH // 2 - 115, 500, 230, 46)
             self.ui.draw_button(self.ai_disclaimer_button, "Продовжити")
 
+    def draw_player_type_stars(self):
+        for key, rect in self.player_type_buttons.items():
+
+            stars_count = self.progress.get_stars_count(key)
+
+            start_x = rect.right - 120
+            y = rect.centery
+
+            for i in range(3):
+
+                color = (255, 215, 0) if i < stars_count else (70, 70, 70)
+
+                pygame.draw.circle(
+                    self.screen,
+                    color,
+                    (start_x + i * 35, y),
+                    10
+                )
+
     def draw(self):
         if self.state == "ai_disclaimer":
             self.draw_ai_disclaimer()
@@ -848,11 +945,16 @@ class Game:
         elif self.state == "menu":
             self.menu_buttons = self.ui.draw_main_menu()
 
+        elif self.state == "minigames":
+            self.minigames.draw()
+
         elif self.state == "select_type":
             self.player_type_buttons = self.ui.draw_player_type_screen()
+            self.draw_player_type_stars()
 
         elif self.state == "test_select_type":
             self.player_type_buttons = self.ui.draw_player_type_screen()
+            self.draw_player_type_stars()
 
         elif self.state == "rules":
             self.back_button = self.ui.draw_rules_screen()

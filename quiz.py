@@ -13,12 +13,19 @@ class Quiz:
         self.last_question_text = None
         self.tasks = self.create_tasks()
         self.big_tests = self.create_big_tests()
-
-    def q(self, question, correct, wrong1, wrong2):
+    def q_text(self, question, correct):
         return {
             "question": question,
-            "answers": [correct, wrong1, wrong2],
+            "answers": [],
             "correct": correct,
+            "type": "text",
+        }
+    def q(self, question, correct, wrong1=None, wrong2=None):
+        return {
+            "question": question + f"\n\nВведіть відповідь: {correct}",
+            "answers": [],
+            "correct": correct,
+            "type": "text",
         }
 
     def create_tasks(self):
@@ -230,6 +237,11 @@ class Quiz:
     def create_big_tests(self):
         return {
             "school": [
+                self.q_text("Введи команду для привітання:", "hello"),
+                self.q_text("Введи команду для відкриття скрині:", "open"),
+                self.q_text("Введи команду для пошуку:", "search"),
+                self.q_text("Введи команду для переходу далі:", "next"),
+                self.q_text("Введи команду для перегляду карти:", "map"),
                 self.q("Скільки буде 5 у квадраті?", "25", "10", "50"),
                 self.q("Що таке площа?", "розмір поверхні", "сума сторін", "лінія"),
                 self.q("Який материк найбільший?", "Євразія", "Африка", "Австралія"),
@@ -247,6 +259,11 @@ class Quiz:
                 self.q("Що таке синонім?", "слово з близьким значенням", "протилежне слово", "помилка"),
             ],
             "student": [
+                self.q_text("Введи команду для початку навчання:", "study"),
+                self.q_text("Введи команду для читання книги:", "read"),
+                self.q_text("Введи команду для аналізу інформації:", "analyze"),
+                self.q_text("Введи команду для виконання завдання:", "task"),
+                self.q_text("Введи команду для перевірки знань:", "test"),
                 self.q("Що таке наукова проблема?", "питання, яке потребує розв'язання", "запізнення", "файл фото"),
                 self.q("Що таке доказ?", "підтвердження певної думки", "випадкова фраза", "стиль шрифту"),
                 self.q("Що таке планування проєкту?", "визначення етапів роботи", "видалення файлів", "пауза"),
@@ -264,6 +281,11 @@ class Quiz:
                 self.q("Що таке висновкове судження?", "підсумкова думка", "номер групи", "назва аудиторії"),
             ],
             "adult": [
+                self.q_text("Введи команду для перегляду бюджету:", "budget"),
+                self.q_text("Введи команду для бізнес-плану:", "plan"),
+                self.q_text("Введи команду для фінансового аналізу:", "finance"),
+                self.q_text("Введи команду для розрахунку прибутку:", "profit"),
+                self.q_text("Введи команду для інвестиції:", "invest"),
                 self.q("Що таке точка беззбитковості?", "рівень, де дохід дорівнює витратам", "найбільший борг", "податок"),
                 self.q("Що таке бізнес-модель?", "спосіб заробітку компанії", "номер рахунку", "знижка"),
                 self.q("Що таке ризик-менеджмент?", "управління ризиками", "покупка без плану", "офіс"),
@@ -281,6 +303,11 @@ class Quiz:
                 self.q("Що таке прибутковість?", "здатність приносити прибуток", "розмір штрафу", "назва бренду"),
             ],
             "programmer": [
+                self.q_text("Введи команду виводу тексту у Python:", "print"),
+                self.q_text("Введи команду для циклу:", "for"),
+                self.q_text("Введи команду для перевірки умови:", "if"),
+                self.q_text("Введи команду для створення функції:", "def"),
+                self.q_text("Введи команду для імпорту модуля:", "import"),
                 self.q("Що таке REST?", "архітектурний стиль API", "тип картинки", "помилка"),
                 self.q("Що таке HTTP-запит?", "запит клієнта до сервера", "цикл у Python", "тип кнопки"),
                 self.q("Що таке SQL-запит?", "команда до бази даних", "шрифт", "файл фону"),
@@ -306,6 +333,14 @@ class Quiz:
             self.last_question_text = None
 
     def shuffle_question(self, question_data):
+        if question_data.get("type") == "text":
+            return {
+                "question": question_data["question"],
+                "answers": [],
+                "correct": question_data["correct"],
+                "type": "text",
+            }
+
         answers = question_data["answers"].copy()
         random.shuffle(answers)
 
@@ -317,7 +352,14 @@ class Quiz:
 
     def get_pool(self, player_type=None, world_level=1):
         p_type = player_type or self.player_type
-        return self.tasks.get(p_type, self.tasks["school"])
+        level = max(1, min(3, world_level))
+
+        data = self.tasks.get(p_type, self.tasks["school"])
+
+        if isinstance(data, dict):
+            return data.get(level, data.get(1, []))
+
+        return data
 
     def get_random_task(self):
         return self.get_location_task("random", 1)
@@ -343,18 +385,39 @@ class Quiz:
                 available = filtered
 
         task = random.choice(available)
+        text_questions = [q for q in available if q.get("type") == "text"]
+        if text_questions and random.randint(1, 100) <= 35:
+            task = random.choice(text_questions)
+        else:
+            task = random.choice(available)
+            
         used.add(task["question"])
         self.last_question_text = task["question"]
 
         return self.shuffle_question(task)
 
-    def get_big_test(self, player_type=None, total=20):
+    def get_big_test(self, player_type=None, total=20, difficulty_level=1):
         p_type = player_type or self.player_type
-        pool = self.big_tests.get(p_type, self.big_tests["school"]).copy()
+        level = max(1, min(3, difficulty_level))
+
+        data = self.big_tests.get(p_type, self.big_tests["school"])
+
+        if isinstance(data, dict):
+            pool = data.get(level, data.get(1, [])).copy()
+        else:
+            pool = data.copy()
+
         random.shuffle(pool)
 
         selected = pool[:min(total, len(pool))]
+
         return [self.shuffle_question(q) for q in selected]
 
     def check_answer(self, data, answer):
-        return data and data["correct"] == answer
+        if not data:
+            return False
+
+        if data.get("type") == "text":
+            return str(answer).strip().lower() == str(data["correct"]).strip().lower()
+
+        return data["correct"] == answer
