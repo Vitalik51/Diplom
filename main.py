@@ -615,6 +615,24 @@ class Game:
         self.state = "game"
 
     def handle_keydown(self, event):
+        if self.state == "big_test" and self.current_task:
+
+            if self.current_task.get("type") == "text":
+
+                if event.key == pygame.K_BACKSPACE:
+                    self.text_answer = self.text_answer[:-1]
+
+                elif event.key == pygame.K_RETURN:
+                    self.complete_big_test_answer(
+                        self.text_answer.strip()
+                    )
+                    self.text_answer = ""
+
+                else:
+                    if event.unicode:
+                        self.text_answer += event.unicode
+
+            return
         if self.state == "game" and self.show_task and self.current_task:
             if self.current_task.get("type") == "text":
                 if event.key == pygame.K_BACKSPACE:
@@ -884,8 +902,11 @@ class Game:
         self.screen.blit(info_img, info_img.get_rect(center=(WIDTH // 2, 70)))
 
         if self.current_task:
-            self.quiz_buttons = self.ui.draw_quiz(self.current_task)
+            if self.current_task.get("type") == "text":
+                self.draw_text_question()
+            else:
 
+                self.quiz_buttons = self.ui.draw_quiz(self.current_task)
     def draw_ai_disclaimer(self):
         self.screen.fill((0, 0, 0))
 
